@@ -1,30 +1,30 @@
 package main
 
 import (
+	"aftermildewserver/transforms"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net"
+	"time"
 )
 
-type Message struct {
-	Text string `json:"text"`
-	Sayi int    `json:"sayi"`
-}
+var clientCount = 0
 
 func main() {
 	listener, err := net.Listen("tcp", "localhost:12345")
 	if err != nil {
-		fmt.Println("Error:", err)
+		fmt.Println("Hata:", err)
 		return
 	}
 	defer listener.Close()
 
-	fmt.Println("Server listening on port 12345")
+	fmt.Println("Sunucu 12345 portunda dinliyor")
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Error accepting connection:", err)
+			fmt.Println("Hata bağlantı kabul edilirken:", err)
 			continue
 		}
 		go handleConnection(conn)
@@ -32,40 +32,57 @@ func main() {
 }
 
 func handleConnection(conn net.Conn) {
-	defer conn.Close()
+	clientCount++
+	defer func() {
+		fmt.Printf("Bağlantı kapatıldı. Toplam istemci sayısı: %d\n", clientCount)
+		conn.Close()
+		clientCount--
+	}()
 
-	message := Message{
-		Text: "Merhaba  unity",
-		Sayi: 80,
+	rand.Seed(time.Now().UnixNano())
+
+	go sendResponse(conn)
+
+	receivedData := make([]byte, 4096)
+	for {
+		n, err := conn.Read(receivedData)
+		if err != nil {
+			fmt.Println("Hata veri alırken:", err)
+			return
+		}
+
+		receivedMessage := transforms.Transforms{}
+		err = json.Unmarshal(receivedData[:n], &receivedMessage)
+		if err != nil {
+			fmt.Println("Hata JSON çözme sırasında:", err)
+			return
+		}
+
+		fmt.Printf("Gelen veri: %+v\n", receivedMessage)
 	}
+}
 
-	data, err := json.Marshal(message)
-	if err != nil {
-		fmt.Println("Error marshaling JSON:", err)
-		return
+func sendResponse(conn net.Conn) {
+	for {
+		message := transforms.Transforms{
+			Position: transforms.Positions{X: float64(rand.Intn(10)), Y: float64(rand.Intn(10)), Z: float64(rand.Intn(10))},
+			Rotation: transforms.Rotations{X: float64(rand.Intn(10)), Y: float64(rand.Intn(10)), Z: float64(rand.Intn(10))},
+		}
+
+		data, err := json.Marshal(message)
+		if err != nil {
+			fmt.Println("Hata JSON kodlamada:", err)
+			return
+		}
+
+		_, err = conn.Write(data)
+		if err != nil {
+			fmt.Println("Hata veri gönderirken:", err)
+			return
+		}
+
+		//fmt.Printf("Sunucudan gönderilen mesaj: %s \n", data)
+
+		time.Sleep(time.Second) // 1 saniye bekle
 	}
-
-	_, err = conn.Write(data)
-	if err != nil {
-		fmt.Println("Error sending data:", err)
-		return
-	}
-
-	// Unity'den gelen cevabı okuma
-	buffer := make([]byte, 1024)
-	n, err := conn.Read(buffer)
-	if err != nil {
-		fmt.Println("Error reading response:", err)
-		return
-	}
-
-	responseData := buffer[:n]
-	var responseMessage Message
-	err = json.Unmarshal(responseData, &responseMessage)
-	if err != nil {
-		fmt.Println("Error unmarshaling response JSON:", err)
-		return
-	}
-
-	fmt.Println("Unity'den gelen cevap:", responseMessage.Text, responseMessage.Sayi)
 }
