@@ -1,6 +1,7 @@
 package main
 
 import (
+	"aftermildewserver/players"
 	"aftermildewserver/transforms"
 	"encoding/json"
 	"fmt"
@@ -39,8 +40,6 @@ func handleConnection(conn net.Conn) {
 		clientCount--
 	}()
 
-	rand.Seed(time.Now().UnixNano())
-
 	go sendResponse(conn)
 
 	receivedData := make([]byte, 4096)
@@ -51,7 +50,7 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 
-		receivedMessage := transforms.Transforms{}
+		receivedMessage := players.Player{}
 		err = json.Unmarshal(receivedData[:n], &receivedMessage)
 		if err != nil {
 			fmt.Println("Hata JSON çözme sırasında:", err)
@@ -64,9 +63,14 @@ func handleConnection(conn net.Conn) {
 
 func sendResponse(conn net.Conn) {
 	for {
-		message := transforms.Transforms{
+		message0 := transforms.Transforms{
 			Position: transforms.Positions{X: float64(rand.Intn(10)), Y: float64(rand.Intn(10)), Z: float64(rand.Intn(10))},
 			Rotation: transforms.Rotations{X: float64(rand.Intn(10)), Y: float64(rand.Intn(10)), Z: float64(rand.Intn(10))},
+		}
+
+		message := players.Player{
+			Id:         "0",
+			Transforms: message0,
 		}
 
 		data, err := json.Marshal(message)
