@@ -2,15 +2,19 @@ package main
 
 import (
 	"aftermildewserver/players"
-	"aftermildewserver/transforms"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"net"
+	"strconv"
 	"time"
 )
 
 var clientCount = 0
+
+var corectionsMap = make(map[net.Addr]int)
+var idMap = make(map[string]players.Player)
 
 func main() {
 	listener, err := net.Listen("tcp", "localhost:12345")
@@ -28,6 +32,24 @@ func main() {
 			fmt.Println("Hata bağlantı kabul edilirken:", err)
 			continue
 		}
+
+		clientAddr := conn.RemoteAddr()
+		clientIP, clientPort, err := net.SplitHostPort(clientAddr.String())
+		log.Println(clientIP, "(:?/)", clientPort)
+		for true {
+			min := 0
+			max := 999
+			randomNumber := rand.Intn(max-min+1) + min
+
+			if _, ok := idMap[strconv.Itoa(randomNumber)]; !ok {
+				idMap[strconv.Itoa(randomNumber)] = players.Player{}
+
+				corectionsMap[clientAddr] = randomNumber
+				break
+			}
+
+		}
+
 		go handleConnection(conn)
 	}
 }
@@ -36,6 +58,8 @@ func handleConnection(conn net.Conn) {
 	clientCount++
 	defer func() {
 		fmt.Printf("Bağlantı kapatıldı. Toplam istemci sayısı: %d\n", clientCount)
+		delete(idMap, strconv.Itoa(corectionsMap[conn.RemoteAddr()]))
+		delete(corectionsMap, conn.LocalAddr())
 		conn.Close()
 		clientCount--
 	}()
@@ -50,28 +74,39 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 
-		receivedMessage := players.Player{}
+		var receivedMessage = make(map[string]players.Player)
+
+		//receivedMessage :=  players.Player{}
 		err = json.Unmarshal(receivedData[:n], &receivedMessage)
 		if err != nil {
 			fmt.Println("Hata JSON çözme sırasında:", err)
 			return
 		}
 
-		fmt.Printf("Gelen veri: %+v\n", receivedMessage)
+		var id string = strconv.Itoa(corectionsMap[conn.RemoteAddr()])
+		idMap[id] = receivedMessage["Palyer"]
+		//fmt.Printf("Gelen veri: %+v\n", receivedMessage["0"])
 	}
 }
 
 func sendResponse(conn net.Conn) {
+	time.Sleep(time.Second)
 	for {
-		message0 := transforms.Transforms{
-			Position: transforms.Positions{X: float64(rand.Intn(10)), Y: float64(rand.Intn(10)), Z: float64(rand.Intn(10))},
-			Rotation: transforms.Rotations{X: float64(rand.Intn(10)), Y: float64(rand.Intn(10)), Z: float64(rand.Intn(10))},
+
+		message1 := players.Player{
+			Id:         strconv.Itoa(corectionsMap[conn.RemoteAddr()]),
+			Transforms: idMap[strconv.Itoa(corectionsMap[conn.RemoteAddr()])].Transforms,
 		}
 
-		message := players.Player{
-			Id:         "0",
-			Transforms: message0,
-		}
+		idMap[strconv.Itoa(corectionsMap[conn.RemoteAddr()])] = message1
+
+		var message = make(map[string]string)
+
+		jsondatas, _ := json.Marshal(message1)
+		message["Player"] = string(jsondatas)
+
+		jsondatasId, _ := json.Marshal(idMap)
+		message["Players"] = string(jsondatasId)
 
 		data, err := json.Marshal(message)
 		if err != nil {
@@ -88,5 +123,6 @@ func sendResponse(conn net.Conn) {
 		//fmt.Printf("Sunucudan gönderilen mesaj: %s \n", data)
 
 		time.Sleep(time.Second) // 1 saniye bekle
+		log.Println(idMap)
 	}
 }
