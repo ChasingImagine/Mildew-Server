@@ -21,6 +21,44 @@ var mutexCorectionsMap sync.Mutex
 var mutexIdMap sync.Mutex
 
 func main() {
+
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		fmt.Println("Ağ arabirimleri alınamadı:", err)
+		return
+	}
+
+	fmt.Println("Aşağıdaki ağ arabirimlerinden birini seçin:")
+	for i, iface := range interfaces {
+		fmt.Printf("%d: %s\n", i+1, iface.Name)
+	}
+
+	var choice int
+	fmt.Print("Seçiminizi yapın (1, 2, 3, ...): ")
+	_, err = fmt.Scan(&choice)
+	if err != nil || choice < 1 || choice > len(interfaces) {
+		fmt.Println("Geçersiz seçim.")
+		return
+	}
+
+	selectedInterface := interfaces[choice-1]
+
+	var selectedIP string
+
+	addrs, err := selectedInterface.Addrs()
+	if err != nil {
+		fmt.Printf("Ağ arabirimi %s için IP adresleri alınamadı: %v\n", selectedInterface.Name, err)
+		return
+	}
+
+	for _, addr := range addrs {
+		ipnet, ok := addr.(*net.IPNet)
+		if ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
+			selectedIP = ipnet.IP.String()
+			fmt.Printf("Seçilen ağ arabirimi %s için yerel IPv4 adresi: %s\n", selectedInterface.Name, selectedIP)
+		}
+	}
+
 	listener, err := net.Listen("tcp", "localhost:12345")
 	if err != nil {
 		fmt.Println("Hata:", err)
